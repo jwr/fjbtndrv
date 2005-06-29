@@ -11,6 +11,7 @@
 #include <linux/types.h>
 #include <linux/ioport.h>
 #include <asm/io.h>
+#include <linux/input.h>
 
 MODULE_AUTHOR("(C) 2005 Jan Rychter <jan@rychter.com>");
 MODULE_DESCRIPTION("FMV Stylistic tablet buttons driver");
@@ -39,6 +40,55 @@ void *fjbuttons_port2 = 0;
 
 static char *fjbuttons_driver_name = "fjbtndrv";
 
+static struct input_dev fjbuttons_dev;
+
+static int fjbuttons_keys[] = { KEY_UP, KEY_DOWN, 0 };
+
+void fjbuttons_dev_init() {
+  int i;
+  memset(&fjbuttons_dev, 0, sizeof(fjbuttons_dev));  
+  fjbuttons_dev.name = fjbuttons_driver_name;
+  set_bit(EV_KEY, fjbuttons_dev.evbit);
+  for(i=0; fjbuttons_keys[i] != 0; i++) 
+    set_bit(fjbuttons_keys[i], fjbuttons_dev.keybit);
+  input_register_device(&fjbuttons_dev);
+}
+
+void fjbuttons_dev_uninit() {
+  input_unregister_device(&fjbuttons_dev);
+}
+
+u16 fjbuttons_dev_translate(u16 code) {
+  switch(code) {
+  case 0xf7ff:
+    return KEY_UP;
+  case 0xfbff:
+    return KEY_DOWN;
+  }
+  return 0;
+}
+
+
+void fjbuttons_dev_handle(u16 code) {
+  int key=fjbuttons_dev_translate(code);
+  if (key) {
+    input_report_key(&fjbuttons_dev, key, 1);
+    input_report_key(&fjbuttons_dev, key, 0);
+    //    input_report_key(&fjbuttons_dev, key&KEY_MAX, 1);
+    input_sync(&fjbuttons_dev);
+    //    input_report_key(&fjbuttons_dev, key&KEY_MAX, 0);
+    //    input_report_key(&fjbuttons_dev, key, 0);
+
+    /*    if (key&SV_CTRL) input_report_key(&irdev, KEY_RIGHTCTRL, 1); 
+    if (key&SV_ALT) input_report_key(&irdev,  KEY_RIGHTALT, 1);
+    if (key&SV_SHIFT) input_report_key(&irdev, KEY_RIGHTSHIFT, 1);
+    input_report_key(&irdev, key&KEY_MAX, 1);
+    input_report_key(&irdev, key&KEY_MAX, 0);
+    if (key&SV_CTRL) input_report_key(&irdev, KEY_RIGHTCTRL, 0);
+    if (key&SV_ALT) input_report_key(&irdev,  KEY_RIGHTALT, 0);
+    if (key&SV_SHIFT) input_report_key(&irdev, KEY_RIGHTSHIFT, 0);*/
+  }
+}
 
 int fjbuttons_busywait(void) {
   /* busy wait until 0xfd76 & 0x02 is 0 */
@@ -88,22 +138,35 @@ void fjbuttons_write_register(u8 reg, u8 value) {
 unsigned int fjbuttons_read_dock_state(void) {
   unsigned int dock_state;
   outb(0x52, FJBUTTONS_DOCK_WRITE);
-  dock_state = inb(FJBUTTONS_DOCK_READ) & 0x10;
+  dock_state = inb(FJBUTTONS_DOCK_READ);
+  //printk(KERN_INFO "fjbtndrv: reading dock register: %02x\n", dock_state);
+  dock_state = !(dock_state & 0x10);
   if(dock_state) {
     printk(KERN_INFO "fjbtndrv: docked.\n");
   } else {
     printk(KERN_INFO "fjbtndrv: not docked.\n");
   }
+  fjbuttons_docked = dock_state;
   return dock_state;
 }
 
 
+unsigned int fjbuttons_read_rotation_state(void) {
+  unsigned int rotation = fjbuttons_read_register(0xdd);
+  //printk(KERN_INFO "fjbtndrv: rotation register: %02x\n", rotation);
+  rotation &= 1;
+  if(rotation) {
+    printk(KERN_INFO "fjbtndrv: vertical.\n");
+  } else {
+    printk(KERN_INFO "fjbtndrv: horizontal.\n");
+  }
+  return fjbuttons_rotation = rotation;
+}
+
 void fjbuttons_reset(void) {
   inb(FJBUTTONS_RESET_PORT);
   /* busy wait until 0xfd76 & 0x02 is 0 */
-  //  if(!fjbuttons_busywait()) {
-  fjbuttons_busywait();
-  if(1) {
+  if(!fjbuttons_busywait()) {
     fjbuttons_write_register(0xe8, 0x02);
     fjbuttons_write_register(0xe9, 0x0c);
     fjbuttons_write_register(0xea, 0x05);
@@ -111,8 +174,8 @@ void fjbuttons_reset(void) {
   }
 
   fjbuttons_reset_until_ready();
-  //  fjbuttons_read_rotation_state();  rotation = fjbuttons_read_register(0xdd);
-  //fjbuttons_read_dock_state();
+  fjbuttons_read_rotation_state();  
+  fjbuttons_read_dock_state();
 }
 
 
@@ -134,11 +197,12 @@ irqreturn_t fjbuttons_irq_handler(int irq, void *dev_id, struct pt_regs *regs)
     return IRQ_HANDLED;
   }
 
-  //state = fjbuttons_read_register(0xdd);
-  //printk(KERN_INFO "fjbtndrv: rotation state: %02x\n", state);
-  keycode = fjbuttons_read_register(0xdf);
-  keycode |= (fjbuttons_read_register(0xde) << 8);
+  state = fjbuttons_read_rotation_state();
+  fjbuttons_read_dock_state();
+  keycode = fjbuttons_read_register(0xde);
+  keycode |= (fjbuttons_read_register(0xdf) << 8);
   printk(KERN_INFO "fjbtndrv: keycodes %04x\n", keycode);
+  fjbuttons_dev_handle(keycode);
   inb(FJBUTTONS_RESET_PORT);
   return IRQ_HANDLED;
 }
@@ -150,14 +214,17 @@ static int __init fjbuttons_init(void) {
   fjbuttons_port2 = request_region(FJBUTTONS_DOCK_BASE, 2, fjbuttons_driver_name);
   request_irq(5, fjbuttons_irq_handler, SA_SAMPLE_RANDOM, fjbuttons_driver_name, NULL);
   fjbuttons_reset();
+  fjbuttons_dev_init();
   return 0;
 }
 
 
 static void __exit fjbuttons_exit(void) {
+  fjbuttons_dev_uninit();
   fjbuttons_cleanup();
   return;
 }
+
 
 
 module_init(fjbuttons_init)
