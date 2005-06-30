@@ -61,19 +61,33 @@ static struct input_dev fjbuttons_dev;
 
 static int fjbuttons_mapping[] = {
   /*key, normal, fn, alt, alt+fn */
-  FJB_1, KEY_TAB, 0, 0, 0,
-  FJB_UP, KEY_UP, 0, 0, 0,
+  FJB_1, KEY_TAB, 0, KEY_F1, 0,
+  FJB_2, KEY_BACKSPACE, 0, KEY_F2, 0,
+  FJB_3, KEY_SPACE, 0, KEY_F3, 0,
+  FJB_4, KEY_ENTER, 0, KEY_F4, 0,
 
+  FJB_PGUP, KEY_PAGEUP,   KEY_KPMINUS, KEY_HOME, 0,
+  FJB_PGDN, KEY_PAGEDOWN, KEY_KPPLUS, KEY_END, 0,
+
+  FJB_UP,   KEY_UP,   KEY_VOLUMEUP,   KEY_LEFT, 0,
+  FJB_DOWN, KEY_DOWN, KEY_VOLUMEDOWN, KEY_RIGHT, 0,
 
   FJB_MAX, 0, 0, 0, 0
 };
   
 
 static int fjbuttons_keys[] = { KEY_LEFTALT,
-
 				KEY_TAB,
+				KEY_SPACE,
+				KEY_BACKSPACE,
 				
 				KEY_ENTER,
+
+				KEY_VOLUMEDOWN,
+				KEY_VOLUMEUP,
+
+				KEY_KPMINUS,
+				KEY_KPPLUS,
 
 				KEY_PAGEUP,
 				KEY_PAGEDOWN,
@@ -94,7 +108,7 @@ static int fjbuttons_keys[] = { KEY_LEFTALT,
 
 				KEY_MAX };
 
-void fjbuttons_dev_init() {
+void fjbuttons_dev_init(void) {
   int i;
   memset(&fjbuttons_dev, 0, sizeof(fjbuttons_dev));  
   fjbuttons_dev.name = fjbuttons_driver_name;
@@ -105,46 +119,19 @@ void fjbuttons_dev_init() {
   input_register_device(&fjbuttons_dev);
 }
 
-void fjbuttons_dev_uninit() {
+void fjbuttons_dev_uninit(void) {
   input_unregister_device(&fjbuttons_dev);
 }
 
-u16 fjbuttons_dev_translate(u16 code) {
-  u8 hi = (code >> 8) & 0xff;
-  u8 lo = code & 0xff;
 
-  if(hi == 0xff) {
-    switch(lo) {
-    case 0xef:
-      input_report_key(&fjbuttons_dev, KEY_LEFTALT, 1);
-      input_report_key(&fjbuttons_dev, KEY_LEFTCTRL, 1);
-      input_report_key(&fjbuttons_dev, KEY_TAB, 1);
-      input_report_key(&fjbuttons_dev, KEY_TAB, 0);
-      input_report_key(&fjbuttons_dev, KEY_LEFTALT, 0);
-      input_report_key(&fjbuttons_dev, KEY_LEFTCTRL, 0);
-      input_sync(&fjbuttons_dev);
-      return 0;
-    case 0xdf:
-      return KEY_TAB;
-    case 0x7f:
-      return KEY_ENTER;
-    case 0xbf:
-      return KEY_ESC;
+u16 fjbuttons_dev_translate(u16 code) {
+  int i = 0;
+  int *ptr;
+  while(*(ptr = &fjbuttons_mapping[i*5]) != FJB_MAX) {
+    if(ptr[0] == code) {
+      return ptr[fjbuttons_pressed_modifiers + 1];
     }
-  }
-  if(lo == 0xff) {
-    switch(hi) {
-    case 0xf7:
-      return KEY_UP;
-    case 0xfb:
-      return KEY_DOWN;
-    case 0xef:
-      return KEY_PAGEUP;
-    case 0xdf:
-      return KEY_PAGEDOWN;
-    case 0x7f:
-      return KEY_LEFTALT;
-    }
+    i++;
   }
   return 0;
 }
@@ -207,7 +194,7 @@ unsigned int fjbuttons_read_dock_state(void) {
   unsigned int dock_state;
   outb(0x52, FJBUTTONS_DOCK_WRITE);
   dock_state = inb(FJBUTTONS_DOCK_READ);
-  printk(KERN_INFO "fjbtndrv: reading dock register: %02x\n", ~dock_state);
+  //  printk(KERN_INFO "fjbtndrv: reading dock register: %02x\n", ~dock_state);
   dock_state = !(dock_state & 0x10);
   /*  if(dock_state) {
     printk(KERN_INFO "fjbtndrv: docked.\n");
@@ -221,7 +208,7 @@ unsigned int fjbuttons_read_dock_state(void) {
 
 unsigned int fjbuttons_read_rotation_state(void) {
   unsigned int rotation = fjbuttons_read_register(0xdd);
-  printk(KERN_INFO "fjbtndrv: rotation register: %02x\n", ~rotation);
+  //  printk(KERN_INFO "fjbtndrv: rotation register: %02x\n", ~rotation);
   rotation &= 1;
   /*  if(rotation) {
     printk(KERN_INFO "fjbtndrv: vertical.\n");
@@ -260,6 +247,7 @@ irqreturn_t fjbuttons_irq_handler(int irq, void *dev_id, struct pt_regs *regs)
   unsigned int irqack = inb(FJBUTTONS_STATUS_PORT);
   u16 keycode;
   u16 state;
+  u16 modifiers;
 
   if(!(irqack & 1)) {
     printk(KERN_INFO "fjbtndrv: Interrupt received, but it isn't ours.\n");
@@ -270,11 +258,17 @@ irqreturn_t fjbuttons_irq_handler(int irq, void *dev_id, struct pt_regs *regs)
   fjbuttons_read_dock_state();
   keycode = fjbuttons_read_register(0xde);
   keycode |= (fjbuttons_read_register(0xdf) << 8);
+  keycode = ~keycode;
+
+  modifiers = (keycode & 0xc000) >> 14;
+  fjbuttons_pressed_modifiers = modifiers;  /* todo: check what has changed */
+
+  keycode = (keycode & ~0xc000) >> 4;
 
   if(keycode != fjbuttons_pressed_keys)
     fjbuttons_dev_handle(fjbuttons_pressed_keys, 0);
   fjbuttons_pressed_keys = keycode;
-  printk(KERN_INFO "fjbtndrv: keycodes %04hx\n", ~keycode);
+  //  printk(KERN_INFO "fjbtndrv: keycodes %04hx\n", ~keycode);
   fjbuttons_dev_handle(keycode, 1);
   inb(FJBUTTONS_RESET_PORT);
   return IRQ_HANDLED;
