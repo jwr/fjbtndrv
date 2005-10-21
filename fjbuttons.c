@@ -61,13 +61,13 @@ static struct input_dev fjbuttons_dev;
 
 static int fjbuttons_mapping[] = {
   /*key, normal, fn, alt, alt+fn */
-  FJB_1, KEY_TAB, 0, KEY_F1, 0,
-  FJB_2, KEY_BACKSPACE, 0, KEY_F2, 0,
-  FJB_3, KEY_SPACE, 0, KEY_F3, 0,
-  FJB_4, KEY_ENTER, 0, KEY_F4, 0,
+  FJB_1, KEY_PRINT, KEY_F5, KEY_F1, 0,
+  FJB_2, KEY_BACKSPACE, KEY_F6, KEY_F2, 0,
+  FJB_3, KEY_SPACE, KEY_F7, KEY_F3, 0,
+  FJB_4, KEY_ENTER, KEY_F8, KEY_F4, 0,
 
-  FJB_PGUP, KEY_PAGEUP,   KEY_KPMINUS, KEY_HOME, 0,
-  FJB_PGDN, KEY_PAGEDOWN, KEY_KPPLUS, KEY_END, 0,
+  FJB_PGUP, KEY_PAGEUP,   KEY_KPMINUS, KEY_HOME, KEY_F11,
+  FJB_PGDN, KEY_PAGEDOWN, KEY_KPPLUS, KEY_END, KEY_F12,
 
   FJB_UP,   KEY_UP,   KEY_VOLUMEUP,   KEY_LEFT, 0,
   FJB_DOWN, KEY_DOWN, KEY_VOLUMEDOWN, KEY_RIGHT, 0,
@@ -103,8 +103,17 @@ static int fjbuttons_keys[] = { KEY_LEFTALT,
 				KEY_F2,
 				KEY_F3,
 				KEY_F4,
+				KEY_F5,
+				KEY_F6,
+				KEY_F7,
+				KEY_F8,
+
+				KEY_F11,
+				KEY_F12,
 
 				KEY_LEFTCTRL,
+
+				KEY_PRINT,
 
 				KEY_MAX };
 
