@@ -14,7 +14,7 @@
 #include <linux/input.h>
 
 MODULE_AUTHOR("(C) 2005 Jan Rychter <jan@rychter.com>");
-MODULE_DESCRIPTION("FMV Stylistic tablet buttons driver");
+MODULE_DESCRIPTION("Fujitsu FMV Stylistic tablet buttons driver");
 MODULE_LICENSE("Dual BSD/GPL");
 
 #define FJBUTTONS_BASE 			0xfd70
