@@ -196,11 +196,6 @@ unsigned int fjbuttons_read_dock_state(void) {
   dock_state = inb(FJBUTTONS_DOCK_READ);
   //  printk(KERN_INFO "fjbtndrv: reading dock register: %02x\n", ~dock_state);
   dock_state = !(dock_state & 0x10);
-  /*  if(dock_state) {
-    printk(KERN_INFO "fjbtndrv: docked.\n");
-  } else {
-    printk(KERN_INFO "fjbtndrv: not docked.\n");
-    }*/
   fjbuttons_docked = dock_state;
   return dock_state;
 }
@@ -210,11 +205,6 @@ unsigned int fjbuttons_read_rotation_state(void) {
   unsigned int rotation = fjbuttons_read_register(0xdd);
   //  printk(KERN_INFO "fjbtndrv: rotation register: %02x\n", ~rotation);
   rotation &= 1;
-  /*  if(rotation) {
-    printk(KERN_INFO "fjbtndrv: vertical.\n");
-  } else {
-    printk(KERN_INFO "fjbtndrv: horizontal.\n");
-    }*/
   return fjbuttons_rotation = rotation;
 }
 
