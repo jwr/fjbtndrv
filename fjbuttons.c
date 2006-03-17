@@ -42,7 +42,7 @@ void *fjbuttons_port2 = 0;
 
 static char *fjbuttons_driver_name = "fjbtndrv";
 
-static struct input_dev fjbuttons_dev;
+static struct input_dev *fjbuttons_dev;
 
 #define FJB_FN		0x400
 #define FJB_ALT 	0x800
@@ -117,19 +117,23 @@ static int fjbuttons_keys[] = { KEY_LEFTALT,
 
 				KEY_MAX };
 
-void fjbuttons_dev_init(void) {
+int fjbuttons_dev_init(void) {
   int i;
-  memset(&fjbuttons_dev, 0, sizeof(fjbuttons_dev));  
-  fjbuttons_dev.name = fjbuttons_driver_name;
-  set_bit(EV_KEY, fjbuttons_dev.evbit);
-  set_bit(EV_REP, fjbuttons_dev.evbit);
+  fjbuttons_dev = input_allocate_device();
+  if(!fjbuttons_dev) return 0;
+  fjbuttons_dev->name = fjbuttons_driver_name;
+  set_bit(EV_KEY, fjbuttons_dev->evbit);
+  set_bit(EV_REP, fjbuttons_dev->evbit);
   for(i=0; fjbuttons_keys[i] != KEY_MAX; i++)
-    set_bit(fjbuttons_keys[i], fjbuttons_dev.keybit);
-  input_register_device(&fjbuttons_dev);
+    set_bit(fjbuttons_keys[i], fjbuttons_dev->keybit);
+  if(input_register_device(fjbuttons_dev) != 0) {
+    /* we should deallocate the device here -- but how? */
+  }
+  return 1;
 }
 
 void fjbuttons_dev_uninit(void) {
-  input_unregister_device(&fjbuttons_dev);
+  if(fjbuttons_dev) input_unregister_device(fjbuttons_dev);
 }
 
 
@@ -149,8 +153,8 @@ u16 fjbuttons_dev_translate(u16 code) {
 void fjbuttons_dev_handle(u16 code, int updown) {
   int key=fjbuttons_dev_translate(code);
   if(key) {
-    input_report_key(&fjbuttons_dev, key, updown);
-    input_sync(&fjbuttons_dev);
+    input_report_key(fjbuttons_dev, key, updown);
+    input_sync(fjbuttons_dev);
   }
 }
 
@@ -280,7 +284,9 @@ static int __init fjbuttons_init(void) {
   fjbuttons_port2 = request_region(FJBUTTONS_DOCK_BASE, 2, fjbuttons_driver_name);
   request_irq(5, fjbuttons_irq_handler, SA_SAMPLE_RANDOM, fjbuttons_driver_name, NULL);
   fjbuttons_reset();
-  fjbuttons_dev_init();
+  if(fjbuttons_dev_init() != 0) {
+    return 1;
+  }
   return 0;
 }
 
